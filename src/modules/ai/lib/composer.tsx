@@ -120,6 +120,19 @@ export function AiComposerProvider({ children }: ProviderProps) {
   }, []);
 
   useEffect(() => {
+    const onVoiceInsert = (e: Event) => {
+      const text = (e as CustomEvent<string>).detail;
+      if (typeof text === "string" && text.length > 0) {
+        setValue((v) => (v ? `${v} ${text}` : text));
+        requestAnimationFrame(() => textareaRef.current?.focus());
+      }
+    };
+    window.addEventListener("terax:ai-voice-insert", onVoiceInsert);
+    return () =>
+      window.removeEventListener("terax:ai-voice-insert", onVoiceInsert);
+  }, []);
+
+  useEffect(() => {
     if (pendingSelections.length === 0) return;
     const drained = consumeSelections();
     if (drained.length === 0) return;

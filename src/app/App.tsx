@@ -86,6 +86,11 @@ import {
 import { DEFAULT_SPACE_ID } from "@/modules/tabs/lib/useTabs";
 import { ThemeProvider, useThemeFileEditing } from "@/modules/theme";
 import { UpdaterDialog } from "@/modules/updater";
+import {
+  usePushToTalk,
+  useVoiceController,
+  VoiceHud,
+} from "@/modules/voice";
 import { useWorkspaceEnvStore, type WorkspaceEnv } from "@/modules/workspace";
 import type { SearchAddon } from "@xterm/addon-search";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -298,6 +303,42 @@ export default function App() {
 
   useEditorFileSync({ tabs, tabsRef, editorRefs });
   useThemeFileEditing({ tabsRef, openFileTab });
+
+  const routeTranscript = useCallback(
+    (text: string) => {
+      const active = document.activeElement;
+      const aiFocused =
+        panelOpen && !!active?.closest('[data-voice-target="ai"]');
+      if (!aiFocused && isEditorTab && activeEditorHandle) {
+        activeEditorHandle.insertText(text);
+        return;
+      }
+      if (!aiFocused && isTerminalTab && activeLeafId !== null) {
+        writeToSession(activeLeafId, text);
+        return;
+      }
+      if (hasComposer) {
+        openPanel();
+        window.dispatchEvent(
+          new CustomEvent<string>("terax:ai-voice-insert", { detail: text }),
+        );
+        focusInput(null);
+      }
+    },
+    [
+      panelOpen,
+      isEditorTab,
+      activeEditorHandle,
+      isTerminalTab,
+      activeLeafId,
+      hasComposer,
+      openPanel,
+      focusInput,
+    ],
+  );
+
+  useVoiceController({ route: routeTranscript });
+  usePushToTalk();
 
   const { explorerRoot, inheritedCwdForNewTab } = useWorkspaceCwd(
     activeTab,
@@ -1245,5 +1286,10 @@ export default function App() {
     </ThemeProvider>
   );
 
-  return <AiComposerProvider>{shell}</AiComposerProvider>;
+  return (
+    <AiComposerProvider>
+      {shell}
+      <VoiceHud />
+    </AiComposerProvider>
+  );
 }
