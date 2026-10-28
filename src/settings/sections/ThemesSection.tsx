@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import {
@@ -21,6 +22,7 @@ import {
   setBackgroundKind,
   setBackgroundOpacity,
   setEditorTheme,
+  setWindowVibrancy,
 } from "@/modules/settings/store";
 import { useTheme } from "@/modules/theme";
 import {
@@ -31,15 +33,24 @@ import {
   deleteCustomTheme,
   saveCustomTheme,
 } from "@/modules/theme/customThemes";
-import { deleteThemeFile, emitThemeEdit } from "@/modules/theme/themeFiles";
+import {
+  deleteThemeFile,
+  handOffThemeEdit,
+  type ThemeEditRequest,
+} from "@/modules/theme/themeFiles";
 import { listBuiltinThemes } from "@/modules/theme/themes";
 import { DEFAULT_THEME_ID } from "@/modules/theme/types";
 import { validateTheme } from "@/modules/theme/validateTheme";
+import {
+  type Backdrop,
+  getBackdropKind,
+} from "@/modules/theme/vibrancy";
 import { Edit02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
+import { SettingRow } from "../components/SettingRow";
 
 export function ThemesSection() {
   const { themeId, setThemeId, resolvedMode, customThemes } = useTheme();
@@ -58,21 +69,30 @@ export function ThemesSection() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bgInputRef = useRef<HTMLInputElement | null>(null);
 
-  const onCreateTheme = () => {
-    void emitThemeEdit({ action: "create" });
-    void getCurrentWindow().hide();
-  };
-
-  const onEditTheme = (id: string) => {
-    void emitThemeEdit({ action: "edit", id });
-    void getCurrentWindow().hide();
-  };
+  // Editing happens in the main window's code editor, so Settings closes
+  // (destroying its WebContent process) rather than hiding and staying resident.
+  const startThemeEdit = (req: ThemeEditRequest) =>
+    void handOffThemeEdit(req, () => getCurrentWindow().close());
+  const onCreateTheme = () => startThemeEdit({ action: "create" });
+  const onEditTheme = (id: string) => startThemeEdit({ action: "edit", id });
 
   const editorThemePref = usePreferencesStore((s) => s.editorTheme);
   const backgroundKind = usePreferencesStore((s) => s.backgroundKind);
   const backgroundImageId = usePreferencesStore((s) => s.backgroundImageId);
   const backgroundOpacity = usePreferencesStore((s) => s.backgroundOpacity);
   const backgroundBlur = usePreferencesStore((s) => s.backgroundBlur);
+  const windowVibrancy = usePreferencesStore((s) => s.windowVibrancy);
+
+  const [backdrop, setBackdrop] = useState<Backdrop>("none");
+  useEffect(() => {
+    let alive = true;
+    void getBackdropKind().then((k) => {
+      if (alive) setBackdrop(k);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleThemeFiles = async (files: FileList | null) => {
     setImportError(null);
@@ -140,6 +160,22 @@ export function ThemesSection() {
         title="Themes"
         description="Theme, background image, and customization."
       />
+
+      {backdrop === "none" ? null : (
+        <SettingRow
+          title={backdrop === "mica" ? "Mica background" : "Window vibrancy"}
+          description={
+            backdrop === "mica"
+              ? "Blend the header, status bar and gutters into the desktop wallpaper. Windows 11 only."
+              : "Frost the header, status bar and gutters over what is behind the window. Panes stay solid."
+          }
+        >
+          <Switch
+            checked={windowVibrancy}
+            onCheckedChange={(v) => void setWindowVibrancy(v)}
+          />
+        </SettingRow>
+      )}
 
       <div
         role="presentation"

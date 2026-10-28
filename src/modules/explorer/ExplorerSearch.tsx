@@ -23,7 +23,7 @@ import {
   useState,
 } from "react";
 import { usePreferencesStore } from "@/modules/settings/preferences";
-import { fileIconUrl } from "./lib/iconResolver";
+import { FileIcon } from "./FileIcon";
 import { copyToClipboard, revealInFinder } from "./lib/contextActions";
 import { COMPACT_CONTENT, COMPACT_ITEM } from "./lib/menuItemClass";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,8 @@ type Props = {
   onRequestClose: () => void;
   onActiveChange?: (active: boolean) => void;
   onRevealInTerminal?: (path: string) => void;
+  onOpenInSourceControl?: (path: string) => void;
+  onOpenGitHistory?: (path: string) => void;
   onAttachToAgent?: (path: string) => void;
 };
 
@@ -65,6 +67,8 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
   onRequestClose,
   onActiveChange,
   onRevealInTerminal,
+  onOpenInSourceControl,
+  onOpenGitHistory,
   onAttachToAgent,
 }: Props,
   ref,
@@ -115,6 +119,7 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
           query: q,
           limit: 200,
           showHidden,
+          requestKey: "explorer-search",
           workspace: currentWorkspaceEnv(),
         });
         if (alive) {
@@ -233,7 +238,6 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
               </div>
             ) : (
               results.map((hit, index) => {
-                const url = hit.is_dir ? null : fileIconUrl(hit.name);
                 const isSelected = index === selectedIndex;
                 return (
                   <ContextMenu key={hit.path}>
@@ -253,8 +257,11 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                         )}
                         title={hit.path}
                       >
-                        {url ? (
-                          <img src={url} alt="" className="size-3.5 shrink-0" />
+                        {!hit.is_dir ? (
+                          <FileIcon
+                            name={hit.name}
+                            className="size-3.5 shrink-0"
+                          />
                         ) : (
                           <HugeiconsIcon
                             icon={Folder01Icon}
@@ -284,6 +291,22 @@ export const ExplorerSearch = forwardRef<ExplorerSearchHandle, Props>(function E
                           onSelect={() => onRevealInTerminal(hit.path)}
                         >
                           Open in Terminal
+                        </ContextMenuItem>
+                      )}
+                      {hit.is_dir && onOpenInSourceControl && (
+                        <ContextMenuItem
+                          className={COMPACT_ITEM}
+                          onSelect={() => onOpenInSourceControl(hit.path)}
+                        >
+                          Open in Source Control
+                        </ContextMenuItem>
+                      )}
+                      {hit.is_dir && onOpenGitHistory && (
+                        <ContextMenuItem
+                          className={COMPACT_ITEM}
+                          onSelect={() => onOpenGitHistory(hit.path)}
+                        >
+                          Open Git History
                         </ContextMenuItem>
                       )}
                       <ContextMenuItem

@@ -8,7 +8,7 @@ import {
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { SidebarViewId } from "./types";
 
-export const SIDEBAR_DEFAULT_WIDTH = 260;
+const SIDEBAR_DEFAULT_WIDTH = 260;
 export const SIDEBAR_MIN_WIDTH = 220;
 export const SIDEBAR_MAX_WIDTH = 480;
 const SIDEBAR_WIDTH_STORAGE_KEY = "terax.sidebar.width";
@@ -75,6 +75,11 @@ export function useSidebarPanel(
     useState<SidebarViewId>(readSidebarView);
   const [initialSidebarCollapsed] = useState(readSidebarCollapsed);
   const collapsedRef = useRef(initialSidebarCollapsed);
+  // Mirrors the panel's collapsed state for rendering: what is hidden at 0 px
+  // can stop doing background work (fs watchers, git status refreshes).
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    initialSidebarCollapsed,
+  );
 
   const persistSidebarView = useCallback((view: SidebarViewId) => {
     setSidebarViewState(view);
@@ -88,6 +93,7 @@ export function useSidebarPanel(
   const persistSidebarCollapsed = useCallback((collapsed: boolean) => {
     if (collapsedRef.current === collapsed) return;
     collapsedRef.current = collapsed;
+    setSidebarCollapsed(collapsed);
     try {
       window.localStorage.setItem(
         SIDEBAR_COLLAPSED_STORAGE_KEY,
@@ -119,6 +125,17 @@ export function useSidebarPanel(
         return;
       }
       persistSidebarView(view);
+    },
+    [persistSidebarView, sidebarView],
+  );
+
+  const openSidebarView = useCallback(
+    (view: SidebarViewId) => {
+      const panel = sidebarRef.current;
+      if (panel && panel.getSize().asPercentage <= 0) {
+        panel.resize(`${sidebarWidthRef.current}px`);
+      }
+      if (view !== sidebarView) persistSidebarView(view);
     },
     [persistSidebarView, sidebarView],
   );
@@ -186,11 +203,13 @@ export function useSidebarPanel(
     sidebarRef,
     sidebarWidthRef,
     sidebarView,
+    sidebarCollapsed,
     initialSidebarCollapsed,
     persistSidebarView,
     persistSidebarCollapsed,
     toggleSidebar,
     cycleSidebarView,
+    openSidebarView,
     persistSidebarWidth,
     toggleExplorerFocus,
   };

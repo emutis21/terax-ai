@@ -3,7 +3,7 @@ import { FolderGitTwoIcon, FolderTreeIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { SidebarViewId } from "./types";
 
-export const SIDEBAR_RAIL_HEIGHT = 36;
+const SIDEBAR_RAIL_HEIGHT = 36;
 
 type RailItem = {
   id: SidebarViewId;
@@ -23,7 +23,7 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
     { id: "explorer", label: "Files", icon: FolderTreeIcon },
     {
       id: "source-control",
-      label: "Source Control",
+      label: "Git",
       icon: FolderGitTwoIcon,
       badge: changedCount,
     },
@@ -32,7 +32,7 @@ export function SidebarRail({ activeView, onSelectView, changedCount }: Props) {
   return (
     <div
       style={{ height: SIDEBAR_RAIL_HEIGHT }}
-      className="flex shrink-0 items-stretch gap-1 border-t border-border/60 bg-card/85 px-1.5 py-1 backdrop-blur"
+      className="flex shrink-0 items-stretch gap-1 border-t border-border/60 bg-foreground/[0.025] px-1.5 py-1"
     >
       {items.map((item) => {
         const isActive = item.id === activeView;

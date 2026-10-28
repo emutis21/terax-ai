@@ -8,7 +8,13 @@ import {
   Message,
   MessageContent,
   MessageResponse,
+  type MessageResponseProps,
 } from "@/components/ai-elements/message";
+import { MarkdownCode } from "@/components/ai-elements/markdown-code";
+import {
+  MarkdownLink,
+  type MarkdownLinkProps,
+} from "@/modules/markdown/MarkdownLink";
 import {
   Reasoning,
   ReasoningContent,
@@ -42,6 +48,7 @@ import type {
 } from "ai";
 import { memo, useCallback, useMemo } from "react";
 import { AiToolApproval } from "./AiToolApproval";
+import { estimateMessageHeight } from "./messageHeightEstimate";
 
 function CommandSnippet({ name }: { name: string }) {
   const meta = SLASH_COMMANDS[name];
@@ -220,12 +227,13 @@ export function AiChatView({
   return (
     <Conversation>
       <ConversationContent className="gap-5 p-3">
-        {messages.map((m) => (
+        {messages.map((m, i) => (
           <RenderedMessage
             key={m.id}
             message={m}
             onApproval={onApproval}
             streaming={m.id === streamingMessageId}
+            deferOffscreen={i < messages.length - LIVE_TAIL_MESSAGES}
           />
         ))}
         {compactionNotice && (
@@ -317,15 +325,33 @@ const ContinueRow = memo(function ContinueRow({
   );
 });
 
+/**
+ * Newest messages stay fully laid out: the stream, the stick-to-bottom
+ * measurement and approval prompts all live there. Older ones let the browser
+ * skip layout and paint while off screen (`content-visibility: auto`), so a
+ * chat with hundreds of messages costs only what is near the viewport.
+ */
+const LIVE_TAIL_MESSAGES = 2;
+
 const RenderedMessage = memo(function RenderedMessage({
   message,
   onApproval,
   streaming,
+  deferOffscreen,
 }: {
   message: UIMessage;
   onApproval: (id: string, approved: boolean) => void;
   streaming: boolean;
+  deferOffscreen: boolean;
 }) {
+  const deferProps = deferOffscreen
+    ? {
+        className: "terax-chat-item",
+        style: {
+          containIntrinsicSize: `auto ${estimateMessageHeight(message)}px`,
+        },
+      }
+    : undefined;
   // Index of the trailing text part — only that one is "live" mid-stream.
   // Earlier text parts (separated by tool calls) are already finalized.
   let lastTextIdx = -1;
@@ -335,6 +361,12 @@ const RenderedMessage = memo(function RenderedMessage({
       break;
     }
   }
+  // Hooks must run unconditionally (Rules of Hooks) even though user messages
+  // render without groups; grouping is cheap so this stays out of the way.
+  const groups = useMemo(() => buildPartGroups(message.parts as AnyPart[]), [
+    message.parts,
+  ]);
+
   if (message.role === "user") {
     const rawText = message.parts
       .filter((p): p is { type: "text"; text: string } => p.type === "text")
@@ -347,7 +379,7 @@ const RenderedMessage = memo(function RenderedMessage({
     const stripped = stripUserContextBlocks(withoutCmd);
 
     return (
-      <Message from="user">
+      <Message from="user" {...deferProps}>
         <MessageContent>
           {commandName ? <CommandSnippet name={commandName} /> : null}
           {stripped.chips.length > 0 ? (
@@ -363,12 +395,8 @@ const RenderedMessage = memo(function RenderedMessage({
     );
   }
 
-  const groups = useMemo(() => buildPartGroups(message.parts as AnyPart[]), [
-    message.parts,
-  ]);
-
   return (
-    <Message from={message.role}>
+    <Message from={message.role} {...deferProps}>
       <MessageContent>
         <div className="flex flex-col gap-3">
           {groups.map((g) => {
@@ -586,6 +614,22 @@ const ReadRow = memo(function ReadRow({ part }: { part: AnyPart }) {
   );
 });
 
+const aiStreamdownComponents = {
+  a: (props: MarkdownLinkProps) => (
+    <MarkdownLink {...props} onSettled={useChatStore.getState().focusInput} />
+  ),
+  code: MarkdownCode,
+};
+
+function AiMessageResponse(props: Omit<MessageResponseProps, "components">) {
+  return (
+    <MessageResponse
+      {...props}
+      components={aiStreamdownComponents}
+    />
+  );
+}
+
 const RenderedPart = memo(function RenderedPart({
   part,
   onApproval,
@@ -597,9 +641,9 @@ const RenderedPart = memo(function RenderedPart({
 }) {
   if (part.type === "text") {
     return (
-      <MessageResponse streaming={streaming}>
+      <AiMessageResponse streaming={streaming}>
         {(part as unknown as { text: string }).text}
-      </MessageResponse>
+      </AiMessageResponse>
     );
   }
 

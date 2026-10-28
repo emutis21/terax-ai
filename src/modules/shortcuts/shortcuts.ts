@@ -35,6 +35,7 @@ export type ShortcutId =
   | "search.focus"
   | "explorer.search"
   | "explorer.focus"
+  | "explorer.toggleHidden"
   | "view.zoomIn"
   | "view.zoomOut"
   | "view.zoomReset"
@@ -47,6 +48,7 @@ export type ShortcutId =
   | "sidebar.toggle"
   | "editor.undo"
   | "editor.redo"
+  | "editor.save"
   | "editor.aiComplete"
   | "editor.codeComplete";
 
@@ -282,6 +284,8 @@ export const SHORTCUTS: Shortcut[] = [
     id: "ai.askSelection",
     label: "Ask AI about selection",
     group: "AI",
+    // Keep Mod+L available to the shell for clear-screen, including when
+    // terminal text is selected and this shortcut is otherwise eligible.
     defaultBindings: [{ [MOD_PROP]: true, key: "j" }],
   },
   {
@@ -307,6 +311,14 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Toggle file explorer focus",
     group: "View",
     defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "e" }],
+  },
+  {
+    id: "explorer.toggleHidden",
+    label: "Toggle hidden files",
+    group: "View",
+    // Finder's toggle. The binding is on the physical Period key, so it holds
+    // on layouts where Shift+. types something else.
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "." }],
   },
   {
     id: "view.zoomIn",
@@ -340,11 +352,9 @@ export const SHORTCUTS: Shortcut[] = [
     group: "View",
     defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "'" }],
   },
-  // Editor entries are display-only: CodeMirror's historyKeymap binds these
-  // keys natively. We register them here so the shortcuts dialog can surface
-  // them — they don't have App-level handlers, so `useGlobalShortcuts` falls
-  // through without `preventDefault`, leaving CodeMirror to handle the event.
-  // Also excluded from the customization UI in ShortcutsSection.
+  // Editor undo/redo: App.tsx registers handlers and useGlobalShortcuts
+  // preventDefaults on match. Keep Mod+Y and add macOS Mod+Shift+Z (#941).
+  // Still excluded from the customization UI in ShortcutsSection.
   {
     id: "editor.undo",
     label: "Undo",
@@ -355,7 +365,18 @@ export const SHORTCUTS: Shortcut[] = [
     id: "editor.redo",
     label: "Redo",
     group: "Editor",
-    defaultBindings: [{ [MOD_PROP]: true, key: "y" }],
+    defaultBindings: [
+      { [MOD_PROP]: true, key: "y" },
+      { [MOD_PROP]: true, shift: true, key: "z" },
+    ],
+  },
+  // Mod+S at the app layer so WKWebView cannot steal "Save Page" (#969).
+  // CodeMirror also binds Mod-s; the global handler preventDefaults first.
+  {
+    id: "editor.save",
+    label: "Save file",
+    group: "Editor",
+    defaultBindings: [{ [MOD_PROP]: true, key: "s" }],
   },
   {
     id: "editor.aiComplete",
@@ -400,8 +421,8 @@ const CODE_TO_KEY: Record<string, string> = {
   Space: " ",
 };
 
-// macOS Option combinations rewrite e.key ("«", "…", dead keys); the
-// physical key survives in e.code.
+// Option and Shift combinations rewrite e.key (macOS Option gives "«", "…",
+// dead keys; Shift turns "." into ">"); the physical key survives in e.code.
 function keyFromCode(code: string): string | null {
   if (code.startsWith("Key")) return code.slice(3).toLowerCase();
   if (code.startsWith("Digit")) return code.slice(5);
@@ -420,7 +441,8 @@ export function matchBinding(
   if (id === "tab.selectByIndex") {
     if (!/^[1-9]$/.test(e.key)) return false;
   } else if (eventKey !== bindingKey) {
-    if (!binding.alt || keyFromCode(e.code) !== bindingKey) return false;
+    if (!binding.alt && !binding.shift) return false;
+    if (keyFromCode(e.code) !== bindingKey) return false;
   }
 
   return (
